@@ -142,12 +142,10 @@ package and a ~215 MiB output.
 3. **publish** — creates the `<app>-v<version>` release if it doesn't exist and
    uploads the `.AppImage` and its `.sha256`.
 
-Run it by hand from the Actions tab to pick specific apps, add `aarch64`, or
-force a rebuild. It needs no secrets beyond the built-in `GITHUB_TOKEN`.
-
-`aarch64` is not in the default matrix: GitHub's arm runners are free on public
-repositories but billed on private ones. Add it via the `arches` input, or
-change the default in the workflow.
+Run it by hand from the Actions tab to pick specific apps, adjust the default
+`x86_64 aarch64` architectures, or force a rebuild. It needs no secrets beyond
+the built-in `GITHUB_TOKEN`. Arm builds run on GitHub's `ubuntu-24.04-arm`
+runner.
 
 `.github/workflows/lint.yml` runs shellcheck over every script on push and PR,
 plus a live metadata-only version check.

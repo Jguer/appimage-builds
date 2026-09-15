@@ -24,7 +24,7 @@ on:
       arches:
         description: 'Space-separated arches (aarch64 needs arm runners)'
         type: string
-        default: 'x86_64'
+        default: 'x86_64 aarch64'
       force:
         description: 'Build even if the version is already released'
         type: boolean
@@ -55,7 +55,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           APPS: ${{ inputs.apps }}
-          ARCHES: ${{ inputs.arches || 'x86_64' }}
+          ARCHES: ${{ inputs.arches || 'x86_64 aarch64' }}
           FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
