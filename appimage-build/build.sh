@@ -32,6 +32,7 @@ TOOLS_DIR="$SCRIPT_DIR/tools"
 WORK_ROOT="$SCRIPT_DIR/build"
 DOWNLOAD_DIR="$SCRIPT_DIR/downloads"
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
