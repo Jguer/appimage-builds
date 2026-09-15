@@ -1,0 +1,28 @@
+#!/bin/sh
+# AppRun — entry point for the ChatGPT AppImage.
+# Resolves paths relative to the mounted AppImage so the bundled
+# Chromium runtime finds its resources regardless of where it is run from.
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export APPDIR="$HERE"
+
+# Bundled libraries sit next to the binary; make sure they win over system ones.
+export LD_LIBRARY_PATH="$HERE/usr/lib/chatgpt${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Ozone platform selection:
+#   default        → native Wayland when running under a Wayland session
+#   CHATGPT_OZONE  → force a specific platform (x11 | wayland | auto)
+if [ -n "${CHATGPT_OZONE:-}" ]; then
+    set -- "--ozone-platform=${CHATGPT_OZONE}" "$@"
+elif [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
+    set -- --ozone-platform=wayland "$@"
+fi
+
+# On systems that restrict unprivileged user namespaces (e.g. Ubuntu 24.04+),
+# the Chromium sandbox may fail to start. Set CHATGPT_NO_SANDBOX=1 to bypass it,
+# or install the bundled AppArmor profile from etc/apparmor.d/chatgpt.
+if [ -n "${CHATGPT_NO_SANDBOX:-}" ]; then
+    exec "$HERE/usr/lib/chatgpt/ChatGPT" --no-sandbox "$@"
+fi
+
+exec "$HERE/usr/lib/chatgpt/codex-launcher" "$@"

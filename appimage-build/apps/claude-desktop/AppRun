@@ -1,0 +1,29 @@
+#!/bin/sh
+# AppRun — entry point for the Claude Desktop AppImage.
+# Resolves paths relative to the mounted AppImage so the bundled
+# Electron runtime finds its resources regardless of where it is run from.
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export APPDIR="$HERE"
+
+# Bundled libraries sit next to the binary; make sure they win over system ones.
+export LD_LIBRARY_PATH="$HERE/usr/lib/claude-desktop${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Ozone platform selection:
+#   default              → let Electron choose (X11, or XWayland on Wayland)
+#   CLAUDE_DESKTOP_OZONE → force a platform (x11 | wayland | auto)
+# Native Wayland is still experimental upstream, so nothing is forced here.
+if [ -n "${CLAUDE_DESKTOP_OZONE:-}" ]; then
+    set -- "--ozone-platform=${CLAUDE_DESKTOP_OZONE}" "$@"
+fi
+
+# Chromium's namespace sandbox needs unprivileged user namespaces. The .deb
+# installs an AppArmor profile for that, but a profile matches on the binary's
+# path and an AppImage runs from a fresh /tmp mount every time, so it cannot
+# apply here. On hosts that restrict user namespaces (Ubuntu 24.04+), set
+# CLAUDE_DESKTOP_NO_SANDBOX=1 to launch without the sandbox.
+if [ -n "${CLAUDE_DESKTOP_NO_SANDBOX:-}" ]; then
+    set -- --no-sandbox "$@"
+fi
+
+exec "$HERE/usr/lib/claude-desktop/claude-desktop" "$@"

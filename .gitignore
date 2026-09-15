@@ -1,0 +1,25 @@
+# Build workspace, cached tooling and artifacts
+appimage-build/build/
+appimage-build/downloads/
+appimage-build/out/
+appimage-build/tools/
+*.AppImage
+*.AppImage.sha256
+*.rpm
+*.deb
+
+# Local agent / editor state
+.claude/
+**/.claude/
+.mcp.json
+.idea
+.vscode
+
+# Shell dotfiles the dev container drops into this directory
+.bash_profile
+.bashrc
+.gitconfig
+.profile
+.ripgreprc
+.zprofile
+.zshrc

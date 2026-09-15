@@ -1,0 +1,41 @@
+name: Lint
+
+# The whole build is shell, so shellcheck is the test suite.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install shellcheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          shellcheck -x \
+            appimage-build/build.sh \
+            appimage-build/check-versions.sh \
+            appimage-build/lib/common.sh \
+            appimage-build/apps/*/app.sh \
+            appimage-build/apps/*/AppRun
+
+      - name: Version check is metadata-only and still works
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./appimage-build/check-versions.sh -a x86_64 -a aarch64

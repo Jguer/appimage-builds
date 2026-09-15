@@ -1,0 +1,176 @@
+name: AppImage release
+
+# Checks each app's upstream version against what this repository has already
+# released, and publishes an AppImage for anything new.
+#
+# The check job only reads small upstream metadata (a yum repository's
+# repodata, an apt repository's Packages index) — it never downloads a payload
+# just to learn a version number. Only the apps that actually need a build go
+# on to fetch anything.
+#
+# Everything here is a thin wrapper around ./appimage-build/check-versions.sh
+# and ./appimage-build/build.sh, both of which run the same way locally.
+
+on:
+  schedule:
+    # Daily, at an off-peak minute to avoid the top-of-hour rush.
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: 'Space-separated app ids (empty = all apps)'
+        type: string
+        default: ''
+      arches:
+        description: 'Space-separated arches (aarch64 needs arm runners)'
+        type: string
+        default: 'x86_64'
+      force:
+        description: 'Build even if the version is already released'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appimage-release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check upstream versions
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.check.outputs.matrix }}
+      any: ${{ steps.check.outputs.any }}
+      failed: ${{ steps.check.outputs.failed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare upstream against published releases
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPS: ${{ inputs.apps }}
+          ARCHES: ${{ inputs.arches || 'x86_64' }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          for arch in $ARCHES; do args+=(--arch "$arch"); done
+          if [ "$FORCE" = 'true' ]; then args+=(--force); fi
+          # $APPS is intentionally unquoted: empty means "every known app".
+          # shellcheck disable=SC2086
+          set -- $APPS
+
+          rc=0
+          ./appimage-build/check-versions.sh --json "${args[@]}" "$@" >versions.json || rc=$?
+          # 3 means at least one upstream feed could not be read; the apps that
+          # did answer are still in versions.json and still worth building.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then
+            exit "$rc"
+          fi
+          echo "failed=$([ "$rc" -eq 3 ] && echo true || echo false)" >>"$GITHUB_OUTPUT"
+
+          matrix="$(jq -c '{
+            include: [ .[] | select(.needs_build) | {
+              app, arch, tag, asset,
+              app_name: .app_name,
+              version: .upstream,
+              runner: (if .arch == "aarch64" then "ubuntu-24.04-arm" else "ubuntu-24.04" end)
+            } ]
+          }' versions.json)"
+          echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
+          echo "any=$(jq -r 'if any(.[]; .needs_build) then "true" else "false" end' versions.json)" >>"$GITHUB_OUTPUT"
+
+          {
+            echo '### Version check'
+            echo
+            echo '| App | Arch | Upstream | Released | Status |'
+            echo '| --- | --- | --- | --- | --- |'
+            jq -r '.[] | "| \(.app) | \(.arch) | \(.upstream // "-") | \(if .released == "" then "-" else .released end) | \(.status) |"' versions.json
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: ${{ matrix.app }} ${{ matrix.version }} (${{ matrix.arch }})
+    needs: check
+    if: needs.check.outputs.any == 'true'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.check.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # dpkg-deb (for the Claude Desktop .deb) is already on the runner;
+          # rpm2cpio and cpio are what the ChatGPT .rpm needs.
+          sudo apt-get install -y --no-install-recommends \
+            squashfs-tools cpio rpm2cpio
+
+      - name: Build AppImage
+        id: build
+        # Everything from the matrix goes through the environment rather than
+        # being interpolated into the command line.
+        env:
+          APP: ${{ matrix.app }}
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ matrix.version }}
+        run: ./appimage-build/build.sh "$APP" --arch "$ARCH" --version "$VERSION"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ matrix.tag }}
+          APP_NAME: ${{ matrix.app_name }}
+          APP: ${{ matrix.app }}
+          VERSION: ${{ matrix.version }}
+          APPIMAGE: ${{ steps.build.outputs.appimage }}
+        run: |
+          set -euo pipefail
+
+          {
+            printf 'Unofficial AppImage build of %s %s.\n\n' "${APP_NAME//_/ }" "$VERSION"
+            printf 'Repackaged unmodified from the upstream release; see\n'
+            printf '`appimage-build/apps/%s/app.sh` for exactly where the payload came from.\n\n' "$APP"
+            printf 'Download the `.AppImage` for your architecture, then:\n\n'
+            printf '```\nchmod +x %s\n./%s\n```\n\n' "$(basename "$APPIMAGE")" "$(basename "$APPIMAGE")"
+            printf 'Checksums are published alongside each asset as `.sha256`.\n'
+          } >notes.md
+
+          # The two arch jobs share a tag, so whichever loses the race falls
+          # through to the upload below.
+          gh release create "$TAG" \
+            --title "${APP_NAME//_/ } $VERSION" \
+            --notes-file notes.md \
+            || gh release view "$TAG" >/dev/null
+
+          gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sha256" --clobber
+
+          {
+            printf '### Published\n\n'
+            printf '%s — [`%s`](%s)\n' "$TAG" "$(basename "$APPIMAGE")" \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  report:
+    name: Report check failures
+    needs: [check, build]
+    if: always() && needs.check.outputs.failed == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail so the schedule surfaces the broken feed
+        run: |
+          echo '::error::at least one upstream version check failed; see the check job summary'
+          exit 1
