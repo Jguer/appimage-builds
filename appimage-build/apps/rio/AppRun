@@ -1,0 +1,15 @@
+#!/bin/sh
+# AppRun — entry point for the Rio AppImage.
+#
+# Resolves paths relative to the mounted AppImage so the bundled binary and its
+# terminfo entry are found regardless of where the AppImage is run from.
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export APPDIR="$HERE"
+
+# Rio ships its own terminfo entry (usr/share/terminfo/r/rio); put it first so
+# `rio` works even on hosts that have never installed the package, while
+# keeping the system directories for everything else.
+export TERMINFO_DIRS="$HERE/usr/share/terminfo:/usr/share/terminfo:/usr/share/lib/terminfo:/lib/terminfo:/etc/terminfo"
+
+exec "$HERE/usr/bin/rio" "$@"

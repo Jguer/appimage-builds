@@ -1,3 +1,5 @@
+# Make is not shell; this keeps `shellcheck Makefile` from parsing it as sh.
+# shellcheck disable=SC1073,SC1065,SC1064,SC1072
 APPS ?=
 ARCH ?=
 APPS_DIR ?= $(HOME)/Applications
@@ -14,7 +16,7 @@ CHECK_ARGS := $(foreach arch,$(ARCH),-a $(arch))
 
 help:
 	@echo "Targets:"
-	@echo "  build              build AppImages (APPS=\"chatgpt\" ARCH=x86_64 make build)"
+	@echo "  build              build AppImages (APPS=\"rio\" ARCH=x86_64 make build)"
 	@echo "  check              compare upstream vs. released versions"
 	@echo "  lint               shellcheck all scripts (same as CI)"
 	@echo "  install            move out/*.AppImage to $(APPS_DIR), version-stripped"

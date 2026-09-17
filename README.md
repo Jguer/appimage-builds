@@ -1,18 +1,21 @@
 # AppImage builds
 
-Unofficial AppImage packaging for two upstream Linux apps that don't ship one,
+Unofficial AppImage packaging for upstream Linux apps that don't ship one,
 and that only publish packages for distributions they officially support:
 
 | App | `id` | Upstream artifact | Officially supports | Arches |
 | --- | --- | --- | --- | --- |
 | ChatGPT desktop | `chatgpt` | `.rpm` from OpenAI's [signed yum repository](https://developers.openai.com/codex/linux/linux-app) | Fedora, Ubuntu, Debian | `x86_64`, `aarch64` |
 | Claude Desktop | `claude-desktop` | `.deb` from Anthropic's [signed apt repository](https://code.claude.com/docs/en/desktop-linux) | Ubuntu, Debian only | `x86_64`, `aarch64` |
+| Rio terminal | `rio` | `_wayland.rpm` from [raphamorim/rio releases](https://github.com/raphamorim/rio/releases) | Fedora (rpm), Debian (deb) | `x86_64`, `aarch64` |
 
 Nothing is patched or recompiled: the upstream payload is verified against its
 published sha256 and repackaged into a squashfs image with an `AppRun` wrapper.
-Both apps bundle their own Chromium/Electron runtime, so the AppImage runs on
-distributions upstream doesn't package for — Claude Desktop on Fedora, RHEL or
-Arch, for instance, where the docs otherwise send you to the CLI.
+ChatGPT and Claude Desktop bundle their own Chromium/Electron runtime, so the
+AppImage runs on distributions upstream doesn't package for — Claude Desktop on
+Fedora, RHEL or Arch, for instance, where the docs otherwise send you to the
+CLI. Rio is a plain dynamically-linked binary packaged as a portable one: the
+AppImage carries the binary and its terminfo entry, not a whole runtime.
 
 Everything runs the same way locally and in CI — the workflow in
 `.github/workflows/appimage-release.yml` is a thin wrapper around the two
@@ -27,7 +30,8 @@ appimage-build/
 ├── lib/common.sh            shared helpers + the app-module contract
 └── apps/
     ├── chatgpt/             app.sh, AppRun
-    └── claude-desktop/      app.sh, AppRun
+    ├── claude-desktop/      app.sh, AppRun
+    └── rio/                 app.sh, AppRun
 ```
 
 ## Checking for updates
@@ -64,11 +68,12 @@ the apps that did answer are still reported.
 ## Building
 
 ```console
-$ ./appimage-build/build.sh claude-desktop        # newest upstream version
-$ ./appimage-build/build.sh chatgpt claude-desktop  # both
-$ ./appimage-build/build.sh claude-desktop -a aarch64
-$ ./appimage-build/build.sh ./chatgpt.x86_64.rpm  # a package you already have
-$ ./appimage-build/build.sh ./claude-desktop_1.49585.0_amd64.deb
+./appimage-build/build.sh claude-desktop        # newest upstream version
+./appimage-build/build.sh chatgpt claude-desktop rio  # several at once
+./appimage-build/build.sh claude-desktop -a aarch64
+./appimage-build/build.sh ./chatgpt.x86_64.rpm  # a package you already have
+./appimage-build/build.sh ./claude-desktop_1.49585.0_amd64.deb
+./appimage-build/build.sh ./rioterm-0.5.27-1.x86_64_wayland.rpm
 ```
 
 The result lands in `appimage-build/out/` next to a `.sha256`:
@@ -76,6 +81,7 @@ The result lands in `appimage-build/out/` next to a `.sha256`:
 ```
 appimage-build/out/Claude_Desktop-1.49585.0-x86_64.AppImage
 appimage-build/out/ChatGPT-26.903.61454-x86_64.AppImage
+appimage-build/out/Rio-0.5.27-x86_64.AppImage
 ```
 
 Builds go to a temporary file and are renamed into place, so rebuilding works
@@ -100,13 +106,15 @@ package you kept.
 ### Dependencies
 
 `curl` (or `wget`), `sha256sum` and `mksquashfs`, plus `rpm2cpio` and `cpio`
-for ChatGPT, and for Claude Desktop either `dpkg-deb` or — on distributions
-that don't have it — `ar`, `tar` and `xz`. `check-versions.sh` also needs `jq`.
-`appimagetool` is fetched on first use and cached in `appimage-build/tools/`.
+for ChatGPT and Rio, and for Claude Desktop either `dpkg-deb` or — on
+distributions that don't have it — `ar`, `tar` and `xz`. `check-versions.sh`
+also needs `jq`. `appimagetool` is fetched on first use and cached in
+`appimage-build/tools/`.
 
 Building ChatGPT needs ~2.5 GiB free: a 440 MiB package that unpacks to 1.4 GiB
 plus the ~500 MiB output. Claude Desktop needs about 1.5 GiB for a 170 MiB
-package and a ~215 MiB output.
+package and a ~215 MiB output. Rio is small — about 150 MiB covers its 11 MiB
+package and ~24 MiB payload.
 
 ### Notes on the wrappers
 
@@ -123,6 +131,11 @@ package and a ~215 MiB output.
   `CLAUDE_DESKTOP_NO_SANDBOX=1`. The setuid bit on Chromium's SUID sandbox
   helper is dropped during assembly, since a squashfs that gets mounted
   `nosuid` can never honour it.
+- **Rio** is packaged from upstream's `_wayland` build, so it wants a Wayland
+  session; set `RIO_VARIANT=x11` when building to package the X11 flavor
+  instead. The AppImage ships Rio's terminfo entry and points `TERMINFO_DIRS`
+  at it, so the `rio` terminal profile resolves without installing the host
+  package.
 - Neither app self-updates from an AppImage. Build a new one, or use
   `check-versions.sh` to find out when it's worth doing.
 - Claude Desktop's **Cowork** tab needs QEMU/KVM host packages

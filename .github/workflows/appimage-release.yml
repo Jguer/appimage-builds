@@ -4,9 +4,11 @@ name: AppImage release
 # released, and publishes an AppImage for anything new.
 #
 # The check job only reads small upstream metadata (a yum repository's
-# repodata, an apt repository's Packages index) — it never downloads a payload
-# just to learn a version number. Only the apps that actually need a build go
-# on to fetch anything.
+# repodata, an apt repository's Packages index, the GitHub releases API plus a
+# release's checksums.txt) — it never downloads a payload just to learn a
+# version number. Only the apps that actually need a build go on to fetch
+# anything. Apps are discovered from appimage-build/apps/, so a new one is
+# picked up here without editing this workflow.
 #
 # Everything here is a thin wrapper around ./appimage-build/check-versions.sh
 # and ./appimage-build/build.sh, both of which run the same way locally.
@@ -115,7 +117,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           # dpkg-deb (for the Claude Desktop .deb) is already on the runner;
-          # rpm2cpio and cpio are what the ChatGPT .rpm needs.
+          # rpm2cpio and cpio are what the ChatGPT and Rio .rpm packages need.
           sudo apt-get install -y --no-install-recommends \
             squashfs-tools cpio rpm2cpio
 
