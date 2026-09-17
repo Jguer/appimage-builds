@@ -111,7 +111,7 @@ app_download() {
 }
 
 app_assemble() {
-    local arch="$1" version="$2" payload="$3" appdir="$4" extract src
+    local arch="$1" version="$2" payload="$3" appdir="$4" extract src rc
 
     require_cmds rpm2cpio cpio
 
@@ -119,7 +119,11 @@ app_assemble() {
     rm -rf "$extract"
     mkdir -p "$extract"
     log "extracting rpm"
-    ( cd "$extract" && rpm2cpio "$payload" | cpio -idm --quiet )
+    set +e
+    ( cd "$extract" && rpm2cpio "$payload" | cpio --no-absolute-filenames -idm --quiet )
+    rc=$?
+    set -e
+    [ "$rc" -le 1 ] || die "failed to extract rpm payload"
 
     src="$extract/usr/lib/chatgpt"
     [ -d "$src" ] || die "unexpected rpm layout (usr/lib/chatgpt missing)"
