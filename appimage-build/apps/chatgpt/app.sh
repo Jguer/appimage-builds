@@ -114,6 +114,9 @@ app_assemble() {
     local arch="$1" version="$2" payload="$3" appdir="$4" extract src rc
 
     require_cmds rpm2cpio cpio
+    # ImageMagick 7 ships `magick`, 6 (Ubuntu) only `convert`.
+    local im
+    im="$(command -v magick || command -v convert)" || die "required command not found: magick (ImageMagick)"
 
     extract="$(dirname "$appdir")/extract"
     rm -rf "$extract"
@@ -138,8 +141,14 @@ app_assemble() {
 
     cp "$extract/usr/share/applications/$APP_ID.desktop" "$appdir/"
     cp "$extract/usr/share/pixmaps/$APP_ID.png" "$appdir/$APP_ID.png"
-    mkdir -p "$appdir/usr/share/icons/hicolor/0x0/apps"
-    cp "$appdir/$APP_ID.png" "$appdir/usr/share/icons/hicolor/0x0/apps/$APP_ID.png"
+    # Upstream ships one 1024x1024 PNG; hicolor has no 1024x1024 (or 0x0) dir,
+    # so desktop integration would install an icon no theme lookup finds.
+    local size
+    for size in 512 256 128 48; do
+        mkdir -p "$appdir/usr/share/icons/hicolor/${size}x${size}/apps"
+        "$im" "$appdir/$APP_ID.png" -resize "${size}x${size}" \
+            "$appdir/usr/share/icons/hicolor/${size}x${size}/apps/$APP_ID.png"
+    done
 
     # AppRun is kept as a separate file in this repo so it can be tweaked freely.
     install -m 0755 "$APP_DEF_DIR/AppRun" "$appdir/AppRun"

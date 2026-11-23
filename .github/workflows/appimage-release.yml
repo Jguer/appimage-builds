@@ -117,9 +117,10 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           # dpkg-deb (for the Claude Desktop .deb) is already on the runner;
-          # rpm2cpio and cpio are what the ChatGPT and Rio .rpm packages need.
+          # rpm2cpio and cpio are what the ChatGPT and Rio .rpm packages need;
+          # imagemagick resizes ChatGPT's 1024px icon into hicolor sizes.
           sudo apt-get install -y --no-install-recommends \
-            squashfs-tools cpio rpm2cpio
+            squashfs-tools cpio rpm2cpio imagemagick
 
       - name: Build AppImage
         id: build

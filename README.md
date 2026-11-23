@@ -106,8 +106,9 @@ package you kept.
 ### Dependencies
 
 `curl` (or `wget`), `sha256sum` and `mksquashfs`, plus `rpm2cpio` and `cpio`
-for ChatGPT and Rio, and for Claude Desktop either `dpkg-deb` or — on
-distributions that don't have it — `ar`, `tar` and `xz`. `check-versions.sh`
+for ChatGPT and Rio, ImageMagick (`magick` or `convert`) for ChatGPT's icon,
+and for Claude Desktop either `dpkg-deb` or — on distributions that don't have
+it — `ar`, `tar` and `xz`. `check-versions.sh`
 also needs `jq`. `appimagetool` is fetched on first use and cached in
 `appimage-build/tools/`.
 
